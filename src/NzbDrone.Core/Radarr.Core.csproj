@@ -3,6 +3,7 @@
     <TargetFrameworks>net8.0</TargetFrameworks>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="BDInfo" Version="0.8.0" />
     <PackageReference Include="Dapper" Version="2.1.66" />
     <PackageReference Include="Diacritical.Net" Version="1.0.4" />
     <PackageReference Include="Equ" Version="2.3.0" />
