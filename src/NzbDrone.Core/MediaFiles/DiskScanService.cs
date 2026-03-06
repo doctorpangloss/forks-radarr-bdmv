@@ -205,32 +205,9 @@ namespace NzbDrone.Core.MediaFiles
                                            .ToList();
 
             // Detect BDMV folders and add their main feature m2ts
-            if (_bdmvFolderDetector.IsBdmvFolder(path))
+            foreach (var bdmvDir in FindBdmvFolders(path))
             {
-                var mainFeature = _bdmvFolderDetector.GetMainFeaturePath(path);
-
-                if (mainFeature.IsNotNullOrWhiteSpace() && !mediaFileList.Contains(mainFeature))
-                {
-                    _logger.Debug("Detected BDMV folder at '{0}', main feature: {1}", path, mainFeature);
-                    mediaFileList.Add(mainFeature);
-                }
-            }
-            else
-            {
-                // Check subdirectories for BDMV structures
-                foreach (var dir in _diskProvider.GetDirectories(path))
-                {
-                    if (_bdmvFolderDetector.IsBdmvFolder(dir))
-                    {
-                        var mainFeature = _bdmvFolderDetector.GetMainFeaturePath(dir);
-
-                        if (mainFeature.IsNotNullOrWhiteSpace() && !mediaFileList.Contains(mainFeature))
-                        {
-                            _logger.Debug("Detected BDMV folder at '{0}', main feature: {1}", dir, mainFeature);
-                            mediaFileList.Add(mainFeature);
-                        }
-                    }
-                }
+                AddBdmvMainFeature(bdmvDir, mediaFileList);
             }
 
             _logger.Trace("{0} files were found in {1}", filesOnDisk.Count, path);
@@ -285,6 +262,52 @@ namespace NzbDrone.Core.MediaFiles
             {
                 _logger.Warn(ex, "Unable to apply permissions to: " + path);
                 _logger.Debug(ex, ex.Message);
+            }
+        }
+
+        private IEnumerable<string> FindBdmvFolders(string path)
+        {
+            if (_bdmvFolderDetector.IsBdmvFolder(path))
+            {
+                yield return path;
+                yield break;
+            }
+
+            foreach (var dir in _diskProvider.GetDirectories(path))
+            {
+                if (_bdmvFolderDetector.IsBdmvFolder(dir))
+                {
+                    yield return dir;
+                }
+            }
+        }
+
+        private void AddBdmvMainFeature(string bdmvDir, List<string> mediaFileList)
+        {
+            var info = _bdmvFolderDetector.GetBdmvInfo(bdmvDir);
+
+            if (info != null)
+            {
+                foreach (var warning in info.Warnings)
+                {
+                    _logger.Warn("BDMV '{0}': {1}", bdmvDir, warning);
+                }
+
+                if (info.MainFeaturePath.IsNotNullOrWhiteSpace() && !mediaFileList.Contains(info.MainFeaturePath))
+                {
+                    mediaFileList.Add(info.MainFeaturePath);
+                }
+
+                return;
+            }
+
+            // BDInfo failed entirely, fall back to largest m2ts
+            var mainFeature = _bdmvFolderDetector.GetMainFeaturePath(bdmvDir);
+
+            if (mainFeature.IsNotNullOrWhiteSpace() && !mediaFileList.Contains(mainFeature))
+            {
+                _logger.Warn("BDMV '{0}': playlist parsing failed, using largest stream file as main feature", bdmvDir);
+                mediaFileList.Add(mainFeature);
             }
         }
 
