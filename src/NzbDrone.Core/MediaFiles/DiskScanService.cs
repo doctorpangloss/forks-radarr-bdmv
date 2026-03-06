@@ -33,6 +33,7 @@ namespace NzbDrone.Core.MediaFiles
         IExecute<RescanMovieCommand>
     {
         private readonly IDiskProvider _diskProvider;
+        private readonly IBdmvFolderDetector _bdmvFolderDetector;
         private readonly IMakeImportDecision _importDecisionMaker;
         private readonly IImportApprovedMovie _importApprovedMovies;
         private readonly IConfigService _configService;
@@ -45,6 +46,7 @@ namespace NzbDrone.Core.MediaFiles
         private readonly Logger _logger;
 
         public DiskScanService(IDiskProvider diskProvider,
+                               IBdmvFolderDetector bdmvFolderDetector,
                                IMakeImportDecision importDecisionMaker,
                                IImportApprovedMovie importApprovedMovies,
                                IConfigService configService,
@@ -57,6 +59,7 @@ namespace NzbDrone.Core.MediaFiles
                                Logger logger)
         {
             _diskProvider = diskProvider;
+            _bdmvFolderDetector = bdmvFolderDetector;
             _importDecisionMaker = importDecisionMaker;
             _importApprovedMovies = importApprovedMovies;
             _configService = configService;
@@ -200,6 +203,35 @@ namespace NzbDrone.Core.MediaFiles
 
             var mediaFileList = filesOnDisk.Where(file => MediaFileExtensions.Extensions.Contains(Path.GetExtension(file)))
                                            .ToList();
+
+            // Detect BDMV folders and add their main feature m2ts
+            if (_bdmvFolderDetector.IsBdmvFolder(path))
+            {
+                var mainFeature = _bdmvFolderDetector.GetMainFeaturePath(path);
+
+                if (mainFeature.IsNotNullOrWhiteSpace() && !mediaFileList.Contains(mainFeature))
+                {
+                    _logger.Debug("Detected BDMV folder at '{0}', main feature: {1}", path, mainFeature);
+                    mediaFileList.Add(mainFeature);
+                }
+            }
+            else
+            {
+                // Check subdirectories for BDMV structures
+                foreach (var dir in _diskProvider.GetDirectories(path))
+                {
+                    if (_bdmvFolderDetector.IsBdmvFolder(dir))
+                    {
+                        var mainFeature = _bdmvFolderDetector.GetMainFeaturePath(dir);
+
+                        if (mainFeature.IsNotNullOrWhiteSpace() && !mediaFileList.Contains(mainFeature))
+                        {
+                            _logger.Debug("Detected BDMV folder at '{0}', main feature: {1}", dir, mainFeature);
+                            mediaFileList.Add(mainFeature);
+                        }
+                    }
+                }
+            }
 
             _logger.Trace("{0} files were found in {1}", filesOnDisk.Count, path);
             _logger.Debug("{0} video files were found in {1}", mediaFileList.Count, path);

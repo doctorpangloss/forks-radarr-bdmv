@@ -7,6 +7,7 @@ using NUnit.Framework;
 using NzbDrone.Common.Disk;
 using NzbDrone.Core.MediaFiles;
 using NzbDrone.Core.Test.Framework;
+using NzbDrone.Test.Common;
 
 namespace NzbDrone.Core.Test.ProviderTests.DiskScanProviderTests
 {
@@ -81,6 +82,57 @@ namespace NzbDrone.Core.Test.ProviderTests.DiskScanProviderTests
             GivenFiles(GetFiles(path));
 
             Subject.GetVideoFiles(path).Should().HaveCount(4);
+        }
+
+        [Test]
+        public void should_include_bdmv_main_feature_when_folder_is_bdmv()
+        {
+            var path = @"C:\Test\Movie".AsOsAgnostic();
+            var mainFeature = Path.Combine(path, "BDMV", "STREAM", "00000.m2ts");
+
+            GivenFiles(GetFiles(path));
+
+            Mocker.GetMock<IBdmvFolderDetector>()
+                .Setup(s => s.IsBdmvFolder(path))
+                .Returns(true);
+
+            Mocker.GetMock<IBdmvFolderDetector>()
+                .Setup(s => s.GetMainFeaturePath(path))
+                .Returns(mainFeature);
+
+            var result = Subject.GetVideoFiles(path);
+
+            result.Should().Contain(mainFeature);
+        }
+
+        [Test]
+        public void should_detect_bdmv_in_subdirectory()
+        {
+            var path = @"C:\Test\Movie".AsOsAgnostic();
+            var bdmvDir = Path.Combine(path, "Snowpiercer.2013.BluRay");
+            var mainFeature = Path.Combine(bdmvDir, "BDMV", "STREAM", "00000.m2ts");
+
+            GivenFiles(GetFiles(path));
+
+            Mocker.GetMock<IBdmvFolderDetector>()
+                .Setup(s => s.IsBdmvFolder(path))
+                .Returns(false);
+
+            Mocker.GetMock<IDiskProvider>()
+                .Setup(s => s.GetDirectories(path))
+                .Returns(new[] { bdmvDir });
+
+            Mocker.GetMock<IBdmvFolderDetector>()
+                .Setup(s => s.IsBdmvFolder(bdmvDir))
+                .Returns(true);
+
+            Mocker.GetMock<IBdmvFolderDetector>()
+                .Setup(s => s.GetMainFeaturePath(bdmvDir))
+                .Returns(mainFeature);
+
+            var result = Subject.GetVideoFiles(path);
+
+            result.Should().Contain(mainFeature);
         }
 
         [TestCase("Extras")]
