@@ -81,6 +81,13 @@ namespace NzbDrone.Core.MediaFiles
 
         public MovieFile MoveMovieFile(MovieFile movieFile, LocalMovie localMovie)
         {
+            var bdmvRoot = GetBdmvRoot(localMovie.Path);
+
+            if (bdmvRoot != null)
+            {
+                return MoveBdmvFolder(movieFile, localMovie, bdmvRoot);
+            }
+
             var newFileName = _buildFileNames.BuildFileName(localMovie.Movie, movieFile, null, localMovie.CustomFormats);
             var filePath = _buildFileNames.BuildFilePath(localMovie.Movie, newFileName, Path.GetExtension(localMovie.Path));
 
@@ -243,9 +250,51 @@ namespace NzbDrone.Core.MediaFiles
                 return false;
             }
 
-            // Check if the relative path contains BDMV/STREAM which indicates it's part of a disc structure
             var normalized = relativePath.Replace('\\', '/');
             return normalized.Contains("BDMV/STREAM/", System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        private string GetBdmvRoot(string filePath)
+        {
+            // Walk up from the file to find the BDMV root (parent of the BDMV directory)
+            var dir = Path.GetDirectoryName(filePath);
+
+            while (dir != null)
+            {
+                var dirName = Path.GetFileName(dir);
+
+                if (dirName.Equals("STREAM", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    var bdmvDir = Path.GetDirectoryName(dir);
+
+                    if (bdmvDir != null && Path.GetFileName(bdmvDir).Equals("BDMV", System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        return Path.GetDirectoryName(bdmvDir);
+                    }
+                }
+
+                dir = Path.GetDirectoryName(dir);
+            }
+
+            return null;
+        }
+
+        private MovieFile MoveBdmvFolder(MovieFile movieFile, LocalMovie localMovie, string bdmvRoot)
+        {
+            var movie = localMovie.Movie;
+            var destBdmvRoot = movie.Path;
+
+            EnsureMovieFolder(movieFile, localMovie, Path.Combine(destBdmvRoot, "placeholder"));
+
+            _logger.Debug("Moving BDMV folder: {0} to {1}", bdmvRoot, destBdmvRoot);
+            _diskProvider.MoveFolder(bdmvRoot, destBdmvRoot);
+
+            var relativePath = bdmvRoot.GetRelativePath(localMovie.Path);
+            var newFilePath = Path.Combine(destBdmvRoot, relativePath);
+
+            movieFile.RelativePath = movie.Path.GetRelativePath(newFilePath);
+
+            return movieFile;
         }
     }
 }
