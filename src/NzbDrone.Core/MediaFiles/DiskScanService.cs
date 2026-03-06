@@ -284,31 +284,21 @@ namespace NzbDrone.Core.MediaFiles
 
         private void AddBdmvMainFeature(string bdmvDir, List<string> mediaFileList)
         {
-            var info = _bdmvFolderDetector.GetBdmvInfo(bdmvDir);
+            var mainFeature = _bdmvFolderDetector.GetMainFeaturePath(bdmvDir);
 
-            if (info != null)
+            if (mainFeature.IsNullOrWhiteSpace() || mediaFileList.Contains(mainFeature))
             {
-                foreach (var warning in info.Warnings)
-                {
-                    _logger.Warn("BDMV '{0}': {1}", bdmvDir, warning);
-                }
-
-                if (info.MainFeaturePath.IsNotNullOrWhiteSpace() && !mediaFileList.Contains(info.MainFeaturePath))
-                {
-                    mediaFileList.Add(info.MainFeaturePath);
-                }
-
                 return;
             }
 
-            // BDInfo failed entirely, fall back to largest m2ts
-            var mainFeature = _bdmvFolderDetector.GetMainFeaturePath(bdmvDir);
+            var info = _bdmvFolderDetector.GetBdmvInfo(bdmvDir);
 
-            if (mainFeature.IsNotNullOrWhiteSpace() && !mediaFileList.Contains(mainFeature))
+            if (info?.Warnings?.Any() == true)
             {
-                _logger.Warn("BDMV '{0}': playlist parsing failed, using largest stream file as main feature", bdmvDir);
-                mediaFileList.Add(mainFeature);
+                _logger.Warn("BDMV {0}: {1}", Path.GetFileName(bdmvDir), string.Join("; ", info.Warnings));
             }
+
+            mediaFileList.Add(mainFeature);
         }
 
         private void RemoveEmptyMovieFolder(string path)

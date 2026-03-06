@@ -61,11 +61,8 @@ namespace NzbDrone.Core.MediaFiles
                 return false;
             }
 
-            var m2tsFiles = _diskProvider.GetFiles(streamPath, false)
-                .Where(f => Path.GetExtension(f).Equals(".m2ts", StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            return m2tsFiles.Any();
+            return _diskProvider.GetFiles(streamPath, false)
+                .Any(f => Path.GetExtension(f).Equals(".m2ts", StringComparison.OrdinalIgnoreCase));
         }
 
         public BdmvInfo GetBdmvInfo(string path)
@@ -85,25 +82,19 @@ namespace NzbDrone.Core.MediaFiles
 
                 bdrom.PlaylistFileScanError += (playlist, ex) =>
                 {
-                    var msg = string.Format("Playlist '{0}' could not be read: {1}", playlist.Name, ex.Message);
-                    _logger.Warn(msg);
-                    warnings.Add(msg);
+                    warnings.Add(string.Format("Corrupt playlist {0}: {1}", playlist.Name, ex.Message));
                     return true;
                 };
 
                 bdrom.StreamClipFileScanError += (streamClip, ex) =>
                 {
-                    var msg = string.Format("Stream clip '{0}' could not be read: {1}", streamClip.Name, ex.Message);
-                    _logger.Warn(msg);
-                    warnings.Add(msg);
+                    warnings.Add(string.Format("Corrupt clip {0}: {1}", streamClip.Name, ex.Message));
                     return true;
                 };
 
                 bdrom.StreamFileScanError += (streamFile, ex) =>
                 {
-                    var msg = string.Format("Stream file '{0}' could not be read: {1}", streamFile.Name, ex.Message);
-                    _logger.Warn(msg);
-                    warnings.Add(msg);
+                    warnings.Add(string.Format("Corrupt stream {0}: {1}", streamFile.Name, ex.Message));
                     return true;
                 };
 
@@ -111,8 +102,9 @@ namespace NzbDrone.Core.MediaFiles
 
                 if (bdrom.PlaylistFiles == null || !bdrom.PlaylistFiles.Any())
                 {
-                    _logger.Warn("BDMV at '{0}' contains no playlists", path);
-                    return null;
+                    warnings.Add("No playlists found");
+                    _cachedInfo = new BdmvInfo { Warnings = warnings };
+                    return _cachedInfo;
                 }
 
                 foreach (var playlist in bdrom.PlaylistFiles.Values)
@@ -120,42 +112,26 @@ namespace NzbDrone.Core.MediaFiles
                     playlist.Scan(bdrom.StreamFiles, bdrom.StreamClipFiles);
                 }
 
-                var candidates = bdrom.PlaylistFiles.Values
-                    .Where(p => p.IsValid && !p.HasLoops)
-                    .Where(p => p.TotalLength >= 120)
+                var mainPlaylist = bdrom.PlaylistFiles.Values
+                    .Where(p => p.IsValid && !p.HasLoops && p.TotalLength >= 120)
                     .OrderByDescending(p => p.TotalLength)
-                    .ToList();
-
-                var mainPlaylist = candidates.FirstOrDefault();
+                    .FirstOrDefault();
 
                 if (mainPlaylist == null)
                 {
-                    var allPlaylists = bdrom.PlaylistFiles.Values.ToList();
-                    _logger.Warn("BDMV at '{0}' has {1} playlists but none are valid main features (all are looping, invalid, or under 2 minutes)", path, allPlaylists.Count);
-                    return null;
+                    warnings.Add(string.Format("{0} playlists found but none qualify as main feature", bdrom.PlaylistFiles.Count));
+                    _cachedInfo = new BdmvInfo { Warnings = warnings };
+                    return _cachedInfo;
                 }
 
                 var mainClip = mainPlaylist.StreamClips
                     .OrderByDescending(c => c.Length)
                     .FirstOrDefault();
 
-                string mainFeaturePath = null;
-                if (mainClip?.StreamFile?.FileInfo != null)
-                {
-                    mainFeaturePath = mainClip.StreamFile.FileInfo.FullName;
-                }
-
-                _logger.Debug("BDMV at '{0}': main playlist '{1}' ({2:F0}min), {3} playlists total, {4}",
-                    path,
-                    mainPlaylist.Name,
-                    mainPlaylist.TotalLength / 60.0,
-                    candidates.Count,
-                    bdrom.IsUHD ? "UHD" : "HD");
-
                 _cachedInfo = new BdmvInfo
                 {
                     MainPlaylistPath = mainPlaylist.GetFilePath(),
-                    MainFeaturePath = mainFeaturePath,
+                    MainFeaturePath = mainClip?.StreamFile?.FileInfo?.FullName,
                     DurationSeconds = mainPlaylist.TotalLength,
                     TotalSize = (long)mainPlaylist.TotalSize,
                     IsUhd = bdrom.IsUHD,
@@ -167,7 +143,7 @@ namespace NzbDrone.Core.MediaFiles
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Failed to read BDMV disc structure at '{0}'", path);
+                _logger.Debug(ex, "BDInfo parse failed for '{0}'", path);
                 return null;
             }
         }
@@ -180,14 +156,13 @@ namespace NzbDrone.Core.MediaFiles
                 return info.MainFeaturePath;
             }
 
-            _logger.Debug("Falling back to largest m2ts for BDMV at '{0}'", path);
             return GetMainFeatureBySize(path);
         }
 
         public long GetTotalSize(string path)
         {
             var info = GetBdmvInfo(path);
-            if (info != null)
+            if (info != null && info.TotalSize > 0)
             {
                 return info.TotalSize;
             }
