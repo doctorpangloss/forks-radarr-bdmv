@@ -28,6 +28,7 @@ namespace NzbDrone.Core.MediaFiles
         private readonly IBuildFileNames _buildFileNames;
         private readonly IDiskTransferService _diskTransferService;
         private readonly IDiskProvider _diskProvider;
+        private readonly IBdmvFolderDetector _bdmvFolderDetector;
         private readonly IMediaFileAttributeService _mediaFileAttributeService;
         private readonly IImportScript _scriptImportDecider;
         private readonly IRootFolderService _rootFolderService;
@@ -39,6 +40,7 @@ namespace NzbDrone.Core.MediaFiles
                                 IBuildFileNames buildFileNames,
                                 IDiskTransferService diskTransferService,
                                 IDiskProvider diskProvider,
+                                IBdmvFolderDetector bdmvFolderDetector,
                                 IMediaFileAttributeService mediaFileAttributeService,
                                 IImportScript scriptImportDecider,
                                 IRootFolderService rootFolderService,
@@ -50,6 +52,7 @@ namespace NzbDrone.Core.MediaFiles
             _buildFileNames = buildFileNames;
             _diskTransferService = diskTransferService;
             _diskProvider = diskProvider;
+            _bdmvFolderDetector = bdmvFolderDetector;
             _mediaFileAttributeService = mediaFileAttributeService;
             _scriptImportDecider = scriptImportDecider;
             _rootFolderService = rootFolderService;
@@ -60,6 +63,12 @@ namespace NzbDrone.Core.MediaFiles
 
         public MovieFile MoveMovieFile(MovieFile movieFile, Movie movie)
         {
+            if (IsInsideBdmvFolder(movieFile, movie))
+            {
+                _logger.Debug("Skipping rename for BDMV file: {0}", movieFile);
+                return movieFile;
+            }
+
             var newFileName = _buildFileNames.BuildFileName(movie, movieFile);
             var filePath = _buildFileNames.BuildFilePath(movie, newFileName, Path.GetExtension(movieFile.RelativePath));
 
@@ -223,6 +232,20 @@ namespace NzbDrone.Core.MediaFiles
             }
 
             _mediaFileAttributeService.SetFolderPermissions(directoryName);
+        }
+
+        private bool IsInsideBdmvFolder(MovieFile movieFile, Movie movie)
+        {
+            var relativePath = movieFile.RelativePath;
+
+            if (relativePath == null)
+            {
+                return false;
+            }
+
+            // Check if the relative path contains BDMV/STREAM which indicates it's part of a disc structure
+            var normalized = relativePath.Replace('\\', '/');
+            return normalized.Contains("BDMV/STREAM/", System.StringComparison.OrdinalIgnoreCase);
         }
     }
 }
