@@ -48,13 +48,14 @@ namespace NzbDrone.Core.MediaFiles.MovieImport.Aggregation.Aggregators.Augmenter
                         var info = _bdmvFolderDetector.GetBdmvInfo(bdmvRoot);
 
                         // BR-DISK quality is defined at 1080p regardless of actual disc resolution
+                        // Use MediaInfo confidence so MediaInfo augmenter can't override with stream resolution
                         return new AugmentQualityResult(
                             QualitySource.BLURAY,
-                            Confidence.Tag,
+                            Confidence.MediaInfo,
                             (int)Resolution.R1080p,
-                            Confidence.Tag,
+                            Confidence.MediaInfo,
                             Modifier.BRDISK,
-                            Confidence.Tag,
+                            Confidence.MediaInfo,
                             null,
                             Confidence.Default);
                     }
