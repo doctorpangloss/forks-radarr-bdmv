@@ -113,19 +113,10 @@ namespace NzbDrone.Core.MediaFiles.MovieImport
                         movieFile.IndexerFlags = localMovie.IndexerFlags;
                     }
 
-                    bool copyOnly;
-                    switch (importMode)
+                    var resolvedImportMode = importMode;
+                    if (resolvedImportMode == ImportMode.Auto)
                     {
-                        default:
-                        case ImportMode.Auto:
-                            copyOnly = downloadClientItem is { CanMoveFiles: false };
-                            break;
-                        case ImportMode.Move:
-                            copyOnly = false;
-                            break;
-                        case ImportMode.Copy:
-                            copyOnly = true;
-                            break;
+                        resolvedImportMode = downloadClientItem is { CanMoveFiles: false } ? ImportMode.Copy : ImportMode.Move;
                     }
 
                     if (newDownload)
@@ -133,7 +124,7 @@ namespace NzbDrone.Core.MediaFiles.MovieImport
                         movieFile.SceneName = localMovie.SceneName;
                         movieFile.OriginalFilePath = GetOriginalFilePath(downloadClientItem, localMovie);
 
-                        oldFiles = _movieFileUpgrader.UpgradeMovieFile(movieFile, localMovie, copyOnly).OldFiles;
+                        oldFiles = _movieFileUpgrader.UpgradeMovieFile(movieFile, localMovie, resolvedImportMode).OldFiles;
                     }
                     else
                     {
@@ -167,7 +158,7 @@ namespace NzbDrone.Core.MediaFiles.MovieImport
 
                         if (!localMovie.ScriptImported || localMovie.ShouldImportExtras)
                         {
-                            _extraService.ImportMovie(localMovie, movieFile, copyOnly);
+                            _extraService.ImportMovie(localMovie, movieFile, resolvedImportMode != ImportMode.Move);
                         }
                     }
 

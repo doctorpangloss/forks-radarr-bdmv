@@ -4,6 +4,7 @@ namespace NzbDrone.Core.MediaFiles.MovieImport
     {
         Auto = 0,
         Move = 1,
-        Copy = 2
+        Copy = 2,
+        HardLink = 3
     }
 }

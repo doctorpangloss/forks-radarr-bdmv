@@ -9,7 +9,7 @@ namespace NzbDrone.Core.MediaFiles
 {
     public interface IUpgradeMediaFiles
     {
-        MovieFileMoveResult UpgradeMovieFile(MovieFile movieFile, LocalMovie localMovie, bool copyOnly = false);
+        MovieFileMoveResult UpgradeMovieFile(MovieFile movieFile, LocalMovie localMovie, ImportMode importMode = ImportMode.Move);
     }
 
     public class UpgradeMediaFileService : IUpgradeMediaFiles
@@ -33,7 +33,7 @@ namespace NzbDrone.Core.MediaFiles
             _logger = logger;
         }
 
-        public MovieFileMoveResult UpgradeMovieFile(MovieFile movieFile, LocalMovie localMovie, bool copyOnly = false)
+        public MovieFileMoveResult UpgradeMovieFile(MovieFile movieFile, LocalMovie localMovie, ImportMode importMode = ImportMode.Move)
         {
             _logger.Trace("Upgrading movie file.");
 
@@ -71,13 +71,17 @@ namespace NzbDrone.Core.MediaFiles
 
             localMovie.OldFiles = moveFileResult.OldFiles;
 
-            if (copyOnly)
+            switch (importMode)
             {
-                moveFileResult.MovieFile = _movieFileMover.CopyMovieFile(movieFile, localMovie);
-            }
-            else
-            {
-                moveFileResult.MovieFile = _movieFileMover.MoveMovieFile(movieFile, localMovie);
+                case ImportMode.Copy:
+                    moveFileResult.MovieFile = _movieFileMover.CopyMovieFile(movieFile, localMovie);
+                    break;
+                case ImportMode.HardLink:
+                    moveFileResult.MovieFile = _movieFileMover.HardLinkMovieFile(movieFile, localMovie);
+                    break;
+                default:
+                    moveFileResult.MovieFile = _movieFileMover.MoveMovieFile(movieFile, localMovie);
+                    break;
             }
 
             return moveFileResult;

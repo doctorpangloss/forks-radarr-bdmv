@@ -20,6 +20,7 @@ namespace NzbDrone.Core.MediaFiles
         MovieFile MoveMovieFile(MovieFile movieFile, Movie movie);
         MovieFile MoveMovieFile(MovieFile movieFile, LocalMovie localMovie);
         MovieFile CopyMovieFile(MovieFile movieFile, LocalMovie localMovie);
+        MovieFile HardLinkMovieFile(MovieFile movieFile, LocalMovie localMovie);
     }
 
     public class MovieFileMovingService : IMoveMovieFiles
@@ -113,6 +114,24 @@ namespace NzbDrone.Core.MediaFiles
 
             _logger.Debug("Copying movie file: {0} to {1}", movieFile.Path, filePath);
             return TransferFile(movieFile, localMovie.Movie, filePath, TransferMode.Copy, localMovie);
+        }
+
+        public MovieFile HardLinkMovieFile(MovieFile movieFile, LocalMovie localMovie)
+        {
+            var bdmvRoot = GetBdmvRoot(localMovie.Path);
+
+            if (bdmvRoot != null)
+            {
+                return HardLinkBdmvFolder(movieFile, localMovie, bdmvRoot);
+            }
+
+            var newFileName = _buildFileNames.BuildFileName(localMovie.Movie, movieFile, null, localMovie.CustomFormats);
+            var filePath = _buildFileNames.BuildFilePath(localMovie.Movie, newFileName, Path.GetExtension(localMovie.Path));
+
+            EnsureMovieFolder(movieFile, localMovie, filePath);
+
+            _logger.Debug("Hard linking movie file: {0} to {1}", movieFile.Path, filePath);
+            return TransferFile(movieFile, localMovie.Movie, filePath, TransferMode.HardLinkOrCopy, localMovie);
         }
 
         private MovieFile TransferFile(MovieFile movieFile, Movie movie, string destinationFilePath, TransferMode mode, LocalMovie localMovie = null)
@@ -288,6 +307,24 @@ namespace NzbDrone.Core.MediaFiles
 
             _logger.Debug("Moving BDMV folder: {0} to {1}", bdmvRoot, destBdmvRoot);
             _diskProvider.MoveFolder(bdmvRoot, destBdmvRoot);
+
+            var relativePath = bdmvRoot.GetRelativePath(localMovie.Path);
+            var newFilePath = Path.Combine(destBdmvRoot, relativePath);
+
+            movieFile.RelativePath = movie.Path.GetRelativePath(newFilePath);
+
+            return movieFile;
+        }
+
+        private MovieFile HardLinkBdmvFolder(MovieFile movieFile, LocalMovie localMovie, string bdmvRoot)
+        {
+            var movie = localMovie.Movie;
+            var destBdmvRoot = movie.Path;
+
+            EnsureMovieFolder(movieFile, localMovie, Path.Combine(destBdmvRoot, "placeholder"));
+
+            _logger.Debug("Hard linking BDMV folder: {0} to {1}", bdmvRoot, destBdmvRoot);
+            _diskTransferService.TransferFolder(bdmvRoot, destBdmvRoot, TransferMode.HardLinkOrCopy);
 
             var relativePath = bdmvRoot.GetRelativePath(localMovie.Path);
             var newFilePath = Path.Combine(destBdmvRoot, relativePath);
