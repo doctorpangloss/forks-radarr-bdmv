@@ -47,18 +47,12 @@ namespace NzbDrone.Core.MediaFiles.MovieImport.Aggregation.Aggregators.Augmenter
                         var bdmvRoot = System.IO.Path.GetDirectoryName(bdmvDir);
                         var info = _bdmvFolderDetector.GetBdmvInfo(bdmvRoot);
 
-                        var resolution = 0;
-
-                        if (info != null && info.IsUhd)
-                        {
-                            resolution = (int)Resolution.R2160p;
-                        }
-
+                        // BR-DISK quality is defined at 1080p regardless of actual disc resolution
                         return new AugmentQualityResult(
                             QualitySource.BLURAY,
                             Confidence.Tag,
-                            resolution,
-                            resolution > 0 ? Confidence.Tag : Confidence.Default,
+                            (int)Resolution.R1080p,
+                            Confidence.Tag,
                             Modifier.BRDISK,
                             Confidence.Tag,
                             null,
