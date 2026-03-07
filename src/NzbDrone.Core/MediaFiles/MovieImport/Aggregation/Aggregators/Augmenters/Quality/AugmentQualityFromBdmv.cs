@@ -9,7 +9,7 @@ namespace NzbDrone.Core.MediaFiles.MovieImport.Aggregation.Aggregators.Augmenter
     {
         private readonly IBdmvFolderDetector _bdmvFolderDetector;
 
-        public int Order => 5;
+        public int Order => 0;
         public string Name => "BDMV";
 
         public AugmentQualityFromBdmv(IBdmvFolderDetector bdmvFolderDetector)
